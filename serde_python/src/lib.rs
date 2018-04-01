@@ -42,6 +42,12 @@ impl ::std::error::Error for Error {
     }
 }
 
+impl serde::de::Error for Error {
+    fn custom<T>(_msg: T) -> Self where T: std::fmt::Display {
+        unimplemented!()
+    }
+}
+
 impl serde::ser::Error for Error {
     fn custom<T>(_msg: T) -> Self where T: std::fmt::Display {
         unimplemented!()
@@ -49,6 +55,404 @@ impl serde::ser::Error for Error {
 }
 
 pub use ser::PyObjectSerializer;
+
+mod des {
+    use cpython::{exc::TypeError, ObjectProtocol, Python, PythonObjectDowncastError, PythonObjectWithCheckedDowncast, PyDict, PyErr, PyList, PyObject, PyTuple};
+    use serde::de::{Deserializer, DeserializeSeed, MapAccess, SeqAccess, Visitor};
+    use std;
+    use super::Error;
+
+    impl<'p> std::convert::From<PythonObjectDowncastError<'p>> for Error {
+        fn from(e: PythonObjectDowncastError) -> Self {
+            Error(e.into())
+        }
+    }
+
+    struct PyObjectDeserializer<'p>(Python<'p>, PyObject);
+
+    macro_rules! deserialize_values {
+        { $( ($v:ident, $f:ident) ),* } => {
+            $(
+                fn $f<V>(self, visitor: V) -> Result<V::Value, Self::Error> where V: Visitor<'de> {
+                    visitor.$v(self.1.extract(self.0)?)
+                }
+            )*
+        };
+    }
+
+    impl<'de, 'a> Deserializer<'de> for &'a mut PyObjectDeserializer<'de> {
+        type Error = Error;
+
+        // Look at the input data to decide what Serde data model type to
+        // deserialize as. Not all data formats are able to support this operation.
+        // Formats that support `deserialize_any` are known as self-describing.
+        fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+            where V: Visitor<'de>
+        {
+            unimplemented!()
+        }
+
+        deserialize_values! {
+            (visit_bool, deserialize_bool),
+            (visit_i8, deserialize_i8),
+            (visit_i16, deserialize_i16),
+            (visit_i32, deserialize_i32),
+            (visit_i64, deserialize_i64),
+            (visit_u8, deserialize_u8),
+            (visit_u16, deserialize_u16),
+            (visit_u32, deserialize_u32),
+            (visit_u64, deserialize_u64),
+            (visit_f32, deserialize_f32),
+            (visit_f64, deserialize_f64),
+            (visit_string, deserialize_string)
+        }
+
+        fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+            where V: Visitor<'de>
+        {
+            visitor.visit_bytes(self.1.extract::<Vec<u8>>(self.0)?.as_ref())
+        }
+
+        fn deserialize_char<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
+            where V: Visitor<'de>
+        {
+            unimplemented!()
+        }
+
+        fn deserialize_str<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+            where V: Visitor<'de>
+        {
+            self.deserialize_string(visitor)
+        }
+
+        fn deserialize_byte_buf<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
+            where V: Visitor<'de>
+        {
+            unimplemented!()
+        }
+
+        // An absent optional is represented as the JSON `null` and a present
+        // optional is represented as just the contained value.
+        //
+        // As commented in `Serializer` implementation, this is a lossy
+        // representation. For example the values `Some(())` and `None` both
+        // serialize as just `null`. Unfortunately this is typically what people
+        // expect when working with JSON. Other formats are encouraged to behave
+        // more intelligently if possible.
+        fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+            where V: Visitor<'de>
+        {
+            if self.1 == self.0.None() {
+                visitor.visit_none()
+            } else {
+                visitor.visit_some(self)
+            }
+        }
+
+        // In Serde, unit means an anonymous value containing no data.
+        fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+            where V: Visitor<'de>
+        {
+            if self.1 == self.0.None() {
+                visitor.visit_unit()
+            } else {
+                Err(PyErr::new::<TypeError, _>(self.0, "Expected null")).map_err(Error)
+            }
+        }
+
+        // Unit struct means a named value containing no data.
+        fn deserialize_unit_struct<V>(
+            self,
+            _name: &'static str,
+            visitor: V
+        ) -> Result<V::Value, Self::Error>
+            where V: Visitor<'de>
+        {
+            self.deserialize_unit(visitor)
+        }
+
+        // As is done here, serializers are encouraged to treat newtype structs as
+        // insignificant wrappers around the data they contain. That means not
+        // parsing anything other than the contained value.
+        fn deserialize_newtype_struct<V>(
+            self,
+            _name: &'static str,
+            visitor: V
+        ) -> Result<V::Value, Self::Error>
+            where V: Visitor<'de>
+        {
+            visitor.visit_newtype_struct(self)
+        }
+
+        // Deserialization of compound types like sequences and maps happens by
+        // passing the visitor an "Access" object that gives it the ability to
+        // iterate through the data contained in the sequence.
+        fn deserialize_seq<V>(mut self, visitor: V) -> Result<V::Value, Self::Error>
+            where V: Visitor<'de>
+        {
+            visitor.visit_seq(PythonListDeserializer(self.0, PyList::downcast_from(self.0, self.1)?, 0))
+        }
+
+        // Tuples look just like sequences in JSON. Some formats may be able to
+        // represent tuples more efficiently.
+        //
+        // As indicated by the length parameter, the `Deserialize` implementation
+        // for a tuple in the Serde data model is required to know the length of the
+        // tuple before even looking at the input data.
+        fn deserialize_tuple<V>(
+            self,
+            _len: usize,
+            visitor: V
+        ) -> Result<V::Value, Self::Error>
+            where V: Visitor<'de>
+        {
+            visitor.visit_seq(PythonTupleDeserializer(self.0, PyTuple::downcast_from(self.0, self.1)?, 0))
+        }
+
+        // Tuple structs look just like sequences in JSON.
+        fn deserialize_tuple_struct<V>(
+            self,
+            _name: &'static str,
+            _len: usize,
+            visitor: V
+        ) -> Result<V::Value, Self::Error>
+            where V: Visitor<'de>
+        {
+            visitor.visit_seq(PythonTupleStructDeserializer(self.0, self.1, 0))
+        }
+
+        // Much like `deserialize_seq` but calls the visitors `visit_map` method
+        // with a `MapAccess` implementation, rather than the visitor's `visit_seq`
+        // method with a `SeqAccess` implementation.
+        fn deserialize_map<V>(mut self, visitor: V) -> Result<V::Value, Self::Error>
+            where V: Visitor<'de>
+        {
+            visitor.visit_map(PythonDictDeserializer(self.0, PyDict::downcast_from(self.0, self.1)?, 0))
+        }
+
+        // Structs look just like maps in JSON.
+        //
+        // Notice the `fields` parameter - a "struct" in the Serde data model means
+        // that the `Deserialize` implementation is required to know what the fields
+        // are before even looking at the input data. Any key-value pairing in which
+        // the fields cannot be known ahead of time is probably a map.
+        fn deserialize_struct<V>(
+            self,
+            _name: &'static str,
+            _fields: &'static [&'static str],
+            visitor: V
+        ) -> Result<V::Value, Self::Error>
+            where V: Visitor<'de>
+        {
+            unimplemented!()
+        }
+
+        fn deserialize_enum<V>(
+            self,
+            _name: &'static str,
+            _variants: &'static [&'static str],
+            visitor: V
+        ) -> Result<V::Value, Self::Error>
+            where V: Visitor<'de>
+        {
+            unimplemented!()
+        }
+
+        // An identifier in Serde is the type that identifies a field of a struct or
+        // the variant of an enum. In JSON, struct fields and enum variants are
+        // represented as strings. In other formats they may be represented as
+        // numeric indices.
+        fn deserialize_identifier<V>(
+            self,
+            visitor: V
+        ) -> Result<V::Value, Error>
+            where V: Visitor<'de>
+        {
+            self.deserialize_str(visitor)
+        }
+
+        fn deserialize_ignored_any<V>(
+            self,
+            visitor: V
+        ) -> Result<V::Value, Error>
+            where V: Visitor<'de>
+        {
+            self.deserialize_any(visitor)
+        }
+    }
+
+    struct PythonListDeserializer<'p>(Python<'p>, PyList, usize);
+
+    // `SeqAccess` is provided to the `Visitor` to give it the ability to iterate
+    // through elements of the sequence.
+    impl<'de, 'a> SeqAccess<'de> for PythonListDeserializer<'a> {
+        type Error = Error;
+
+        fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, Error>
+            where T: DeserializeSeed<'de>
+        {
+            if self.2 < self.1.len(self.0) {
+                let (value,) = self.1.get_item(self.0, self.2).extract(self.0)?;
+                let o = seed.deserialize(value).map(Some);
+                self.2 += 1;
+                o
+            } else {
+                Ok(None)
+            }
+        }
+    }
+
+    struct PythonTupleDeserializer<'p>(Python<'p>, PyTuple, usize);
+
+    // `SeqAccess` is provided to the `Visitor` to give it the ability to iterate
+    // through elements of the sequence.
+    impl<'de, 'a> SeqAccess<'de> for PythonTupleDeserializer<'a> {
+        type Error = Error;
+
+        fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, Error>
+            where T: DeserializeSeed<'de>
+        {
+            if self.2 < self.1.len(self.0) {
+                let (value,) = self.1.get_item(self.0, self.2).extract(self.0)?;
+                let o = seed.deserialize(value).map(Some);
+                self.2 += 1;
+                o
+            } else {
+                Ok(None)
+            }
+        }
+    }
+
+    struct PythonTupleStructDeserializer<'p>(Python<'p>, PyObject, usize);
+
+    // `SeqAccess` is provided to the `Visitor` to give it the ability to iterate
+    // through elements of the sequence.
+    impl<'de, 'a> SeqAccess<'de> for PythonTupleStructDeserializer<'a> {
+        type Error = Error;
+
+        fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, Error>
+            where T: DeserializeSeed<'de>
+        {
+            if self.2 < self.1.len(self.0)? {
+                let (value,) = self.1.getattr(self.0, format!("_{}", self.2)).unwrap().extract(self.0)?;
+                let o = seed.deserialize(value).map(Some);
+                self.2 += 1;
+                o
+            } else {
+                Ok(None)
+            }
+        }
+    }
+
+    struct PythonDictDeserializer<'p>(Python<'p>, PyDict, usize);
+
+    // `MapAccess` is provided to the `Visitor` to give it the ability to iterate
+    // through entries of the map.
+    impl<'de, 'a> MapAccess<'de> for PythonDictDeserializer<'a> {
+        type Error = Error;
+
+        fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>, Error>
+            where K: DeserializeSeed<'de>
+        {
+            if self.2 < self.1.len(self.0) {
+                let (key, _) = self.1.get_item(self.0, self.2).unwrap().extract(self.0)?;
+                let o = seed.deserialize(key).map(Some);
+                self.2 += 1;
+                o
+            } else {
+                Ok(None)
+            }
+        }
+
+        fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value, Error>
+            where V: DeserializeSeed<'de>
+        {
+            let (_, value) = self.1.get_item(self.0, self.2).unwrap().extract(self.0)?;
+            let o = seed.deserialize(value)?;
+            self.2 += 1;
+            Ok(o)
+        }
+    }
+
+    /*
+
+    struct Enum<'a, 'de: 'a> {
+        de: &'a mut Deserializer<'de>,
+    }
+
+    impl<'a, 'de> Enum<'a, 'de> {
+        fn new(de: &'a mut Deserializer<'de>) -> Self {
+            Enum { de: de }
+        }
+    }
+
+    // `EnumAccess` is provided to the `Visitor` to give it the ability to determine
+    // which variant of the enum is supposed to be deserialized.
+    //
+    // Note that all enum deserialization methods in Serde refer exclusively to the
+    // "externally tagged" enum representation.
+    impl<'de, 'a> EnumAccess<'de> for Enum<'a, 'de> {
+        type Error = Error;
+        type Variant = Self;
+
+        fn variant_seed<V>(self, seed: V) -> Result<(V::Value, Self::Variant)>
+            where V: DeserializeSeed<'de>
+        {
+            // The `deserialize_enum` method parsed a `{` character so we are
+            // currently inside of a map. The seed will be deserializing itself from
+            // the key of the map.
+            let val = seed.deserialize(&mut *self.de)?;
+            // Parse the colon separating map key from value.
+            if self.de.next_char()? == ':' {
+                Ok((val, self))
+            } else {
+                Err(Error::ExpectedMapColon)
+            }
+        }
+    }
+
+    // `VariantAccess` is provided to the `Visitor` to give it the ability to see
+    // the content of the single variant that it decided to deserialize.
+    impl<'de, 'a> VariantAccess<'de> for Enum<'a, 'de> {
+        type Error = Error;
+
+        // If the `Visitor` expected this variant to be a unit variant, the input
+        // should have been the plain string case handled in `deserialize_enum`.
+        fn unit_variant(self) -> Result<()> {
+            Err(Error::ExpectedString)
+        }
+
+        // Newtype variants are represented in JSON as `{ NAME: VALUE }` so
+        // deserialize the value here.
+        fn newtype_variant_seed<T>(self, seed: T) -> Result<T::Value>
+            where T: DeserializeSeed<'de>
+        {
+            seed.deserialize(self.de)
+        }
+
+        // Tuple variants are represented in JSON as `{ NAME: [DATA...] }` so
+        // deserialize the sequence of data here.
+        fn tuple_variant<V>(self, _len: usize, visitor: V) -> Result<V::Value>
+            where V: Visitor<'de>
+        {
+            de::Deserializer::deserialize_seq(self.de, visitor)
+        }
+
+        // Struct variants are represented in JSON as `{ NAME: { K: V, ... } }` so
+        // deserialize the inner map here.
+        fn struct_variant<V>(
+            self,
+            _fields: &'static [&'static str],
+            visitor: V,
+        ) -> Result<V::Value>
+            where V: Visitor<'de>
+        {
+            de::Deserializer::deserialize_map(self.de, visitor)
+        }
+    }
+
+    */
+}
 
 mod ser {
     pub use cpython;
