@@ -376,7 +376,8 @@ mod ser {
         fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
             where T: ?Sized + Serialize
         {
-            Ok(self.1.push(value.serialize(PyObjectSerializer(self.0))?))
+            self.1.push(value.serialize(PyObjectSerializer(self.0))?);
+            Ok(())
         }
 
         // Close the sequence.
@@ -392,7 +393,8 @@ mod ser {
         fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
             where T: ?Sized + Serialize
         {
-            Ok(self.1.push(value.serialize(PyObjectSerializer(self.0))?))
+            self.1.push(value.serialize(PyObjectSerializer(self.0))?);
+            Ok(())
         }
 
         fn end(self) -> Result<Self::Ok, Self::Error> {

@@ -4,13 +4,6 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
-
-#[derive(Clone,Python,Serialize)]
-enum E {
-    One,
-    Two
-}
-
 #[derive(Clone,Python,Serialize)]
 struct A {
     foo: String,
@@ -23,8 +16,16 @@ struct A {
 }
 #[derive(Clone,Python,Serialize)]
 struct C(u8, u8);
+
+#[derive(Clone,Python,Serialize)]
+enum E {
+    One,
+    Two
+}
+
 #[test]
 fn serialize() {
+
     use serde_python::cpython::ObjectProtocol;
     let a = A {
         foo: "whee".to_string(),
