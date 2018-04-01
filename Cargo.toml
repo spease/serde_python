@@ -1,12 +1,6 @@
-[package]
-name = "serde_python"
-description = "Uses serde to convert structs to Python"
-license = "MIT"
-version = "0.1.0"
-authors = ["Steven Pease <peasteven@gmail.com>"]
-
-[dependencies]
-cpython = "0.2.0"
-serde = "1.0.36"
-serde_derive = "1.0.36"
-heck = "0.3.0"
+[workspace]
+members = [
+  "serde_python",
+  "serde_python_derive",
+  "serde_python_test",
+]

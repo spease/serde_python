@@ -1,0 +1,13 @@
+[package]
+name = "serde_python_derive"
+description = "Uses serde to convert structs to Python"
+license = "MIT"
+version = "0.1.0"
+authors = ["Steven Pease <peasteven@gmail.com>"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "0.13.0"
+quote = "0.5.1"
