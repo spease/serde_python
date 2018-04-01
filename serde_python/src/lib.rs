@@ -43,7 +43,10 @@ impl ::std::error::Error for Error {
 }
 
 impl serde::ser::Error for Error {
-    fn custom<T>(_msg: T) -> Self where T: std::fmt::Display {
+    fn custom<T>(_msg: T) -> Self
+    where
+        T: std::fmt::Display,
+    {
         unimplemented!()
     }
 }
@@ -55,7 +58,8 @@ mod ser {
     pub use serde;
     use std;
     use super::Error;
-    use cpython::{ObjectProtocol, Python, PythonObject, PyDict, PyList, PyObject, PyTuple, ToPyObject};
+    use cpython::{ObjectProtocol, PyDict, PyList, PyObject, PyTuple, Python, PythonObject,
+                  ToPyObject};
     use heck::ShoutySnakeCase;
     // use itertools::Itertools;
     // use named_type::NamedType;
@@ -83,7 +87,10 @@ mod ser {
     }
 
     impl<'p> PyObjectSerializer<'p> {
-        fn serialize_value<T, E>(self, v: T) -> Result<PyObject, E> where T: ToPyObject {
+        fn serialize_value<T, E>(self, v: T) -> Result<PyObject, E>
+        where
+            T: ToPyObject,
+        {
             Ok(v.into_py_object(self.0).into_object())
         }
     }
@@ -98,7 +105,6 @@ mod ser {
         type SerializeMap = PythonDictSerializer<'p>;
         type SerializeStruct = PythonStructSerializer<'p>;
         type SerializeStructVariant = PythonStructVariantSerializer<'p>;
-
 
         serialize_values! {
             (bool, serialize_bool),
@@ -121,106 +127,93 @@ mod ser {
         fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
             Ok(self.0.None())
         }
-        fn serialize_some<T: ?Sized>(
-            self, 
-            value: &T
-        ) -> Result<Self::Ok, Self::Error>
+        fn serialize_some<T: ?Sized>(self, value: &T) -> Result<Self::Ok, Self::Error>
         where
-            T: Serialize {
-                value.serialize(self)
-            }
+            T: Serialize,
+        {
+            value.serialize(self)
+        }
         fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
             Ok(self.0.None())
         }
-        fn serialize_unit_struct(
-            self, 
-            _name: &'static str
-        ) -> Result<Self::Ok, Self::Error> {
+        fn serialize_unit_struct(self, _name: &'static str) -> Result<Self::Ok, Self::Error> {
             self.serialize_unit()
         }
         fn serialize_unit_variant(
-            self, 
-            _name: &'static str, 
-            _variant_index: u32, 
-            variant: &'static str
+            self,
+            _name: &'static str,
+            _variant_index: u32,
+            variant: &'static str,
         ) -> Result<Self::Ok, Self::Error> {
             // FIXME
             self.serialize_str(&variant.to_shouty_snake_case())
-            // Ok(type_incremental_enum(self.0, name, variant, variant_index)?.getattr(self.0, variant)?)
         }
         fn serialize_newtype_struct<T: ?Sized>(
-            self, 
-            _name: &'static str, 
-            value: &T
+            self,
+            _name: &'static str,
+            value: &T,
         ) -> Result<Self::Ok, Self::Error>
         where
-            T: Serialize {
-                value.serialize(self)
-            }
+            T: Serialize,
+        {
+            value.serialize(self)
+        }
         fn serialize_newtype_variant<T: ?Sized>(
-            self, 
-            _name: &'static str, 
-            _variant_index: u32, 
-            _variant: &'static str, 
-            _value: &T
+            self,
+            _name: &'static str,
+            _variant_index: u32,
+            _variant: &'static str,
+            _value: &T,
         ) -> Result<Self::Ok, Self::Error>
         where
-            T: Serialize {
-                // FIXME
-                unimplemented!()
-            }
-        fn serialize_seq(
-            self, 
-            len: Option<usize>
-        ) -> Result<Self::SerializeSeq, Self::Error> {
+            T: Serialize,
+        {
+            // FIXME
+            unimplemented!()
+        }
+        fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
             if let Some(len) = len {
                 Ok(PythonVecSerializer(self.0, Vec::with_capacity(len)))
             } else {
                 Ok(PythonVecSerializer(self.0, Vec::new()))
             }
         }
-        fn serialize_tuple(
-            self, 
-            len: usize
-        ) -> Result<Self::SerializeTuple, Self::Error> {
+        fn serialize_tuple(self, len: usize) -> Result<Self::SerializeTuple, Self::Error> {
             Ok(PythonVecSerializer(self.0, Vec::with_capacity(len)))
         }
         fn serialize_tuple_struct(
-            self, 
-            name: &'static str, 
-            _len: usize
+            self,
+            name: &'static str,
+            _len: usize,
         ) -> Result<Self::SerializeTupleStruct, Self::Error> {
             PythonStructSerializer::new(self.0, name)
         }
         fn serialize_tuple_variant(
-            self, 
-            _name: &'static str, 
-            _variant_index: u32, 
-            _variant: &'static str, 
-            _len: usize
+            self,
+            _name: &'static str,
+            _variant_index: u32,
+            _variant: &'static str,
+            _len: usize,
         ) -> Result<Self::SerializeTupleVariant, Self::Error> {
             // FIXME
             unimplemented!()
         }
-        fn serialize_map(
-            self, 
-            _len: Option<usize>
-        ) -> Result<Self::SerializeMap, Self::Error> {
+        fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
             Ok(PythonDictSerializer(self.0, PyDict::new(self.0), None))
         }
         fn serialize_struct(
-            self, 
-            name: &'static str, 
-            _len: usize
+            self,
+            name: &'static str,
+            _len: usize,
         ) -> Result<Self::SerializeStruct, Self::Error> {
             PythonStructSerializer::new(self.0, name)
         }
         fn serialize_struct_variant(
-            self, 
-            _name: &'static str, 
-            _variant_index: u32, 
-            _variant: &'static str, 
-            _len: usize
+            self,
+            _name: &'static str,
+            _variant_index: u32,
+            _variant: &'static str,
+            _len: usize,
         ) -> Result<Self::SerializeStructVariant, Self::Error> {
             // FIXME
             unimplemented!()
@@ -235,18 +228,22 @@ mod ser {
         type Error = Error;
 
         fn serialize_key<T>(&mut self, key: &T) -> Result<(), Self::Error>
-            where T: ?Sized + Serialize
+        where
+            T: ?Sized + Serialize,
         {
             self.2 = Some(key.serialize(PyObjectSerializer(self.0))?);
             Ok(())
         }
 
         fn serialize_value<T>(&mut self, value: &T) -> Result<(), Self::Error>
-            where T: ?Sized + Serialize
+        where
+            T: ?Sized + Serialize,
         {
             let mut key = None;
             std::mem::swap(&mut key, &mut self.2);
-            self.1.set_item(self.0, key, value.serialize(PyObjectSerializer(self.0))?).map_err(Error)
+            self.1
+                .set_item(self.0, key, value.serialize(PyObjectSerializer(self.0))?)
+                .map_err(Error)
         }
 
         fn end(self) -> Result<Self::Ok, Self::Error> {
@@ -254,42 +251,20 @@ mod ser {
         }
     }
 
-    /*
-    fn type_incremental_enum<'p>(p: Python<'p>, name: &str, variant: &str, variant_index: u32) -> Result<PyObject, Error> {
-        let o = p.eval(
-            &format!(
-                "locals().get(\"{}\", type(\"{}\",(enum.Enum,),{{}})",
-                name,
-                name,
-            ),
-            None,
-            None
-        )?;
-        o.setattr(p, variant, variant_index)?;
-        Ok(o)
-    }
-
-    fn type_enum<'p, T>(p: Python<'p>) -> Result<PyObject, Error> where T: Debug+IntoEnumIterator+NamedType, <T as IntoEnumIterator>::Iterator: Iterator<Item=T> {
-        let name = T::short_type_name();
-        p.eval(
-            &format!(
-                "locals().get(\"{}\", type(\"{}\",(),{{{}}})",
-                name,
-                name,
-                T::iter().map(|x| format!("{}: {:?}", format!("{:?}", x).to_shouty_snake_case(), std::mem::discriminant(&x))).join(",")
-            ),
-            None,
-            None
-        ).map_err(Error)
-    }
-    */
-
     /// Serializer for structs
     pub struct PythonStructSerializer<'p>(Python<'p>, PyObject, usize);
 
     impl<'p> PythonStructSerializer<'p> {
         fn new(p: Python<'p>, name: &str) -> Result<Self, Error> {
-            Ok(PythonStructSerializer(p, p.eval(&format!("locals().get(\"{}\", type(\"{}\",(),{{}}))", name, name), None, None).map_err(Error)?, 0))
+            Ok(PythonStructSerializer(
+                p,
+                p.eval(
+                    &format!("locals().get(\"{}\", type(\"{}\",(),{{}}))", name, name),
+                    None,
+                    None,
+                ).map_err(Error)?,
+                0,
+            ))
         }
     }
 
@@ -298,9 +273,12 @@ mod ser {
         type Error = Error;
 
         fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<(), Self::Error>
-            where T: ?Sized + Serialize
+        where
+            T: ?Sized + Serialize,
         {
-            self.1.setattr(self.0, key, value.serialize(PyObjectSerializer(self.0))?).map_err(Error)
+            self.1
+                .setattr(self.0, key, value.serialize(PyObjectSerializer(self.0))?)
+                .map_err(Error)
         }
 
         fn end(self) -> Result<Self::Ok, Self::Error> {
@@ -313,9 +291,16 @@ mod ser {
         type Error = <PyObjectSerializer<'p> as Serializer>::Error;
 
         fn serialize_field<T>(&mut self, value: &T) -> Result<(), Self::Error>
-            where T: ?Sized + Serialize
+        where
+            T: ?Sized + Serialize,
         {
-            let o = self.1.setattr(self.0, format!("_{}", self.2), value.serialize(PyObjectSerializer(self.0))?).map_err(Error);
+            let o = self.1
+                .setattr(
+                    self.0,
+                    format!("_{}", self.2),
+                    value.serialize(PyObjectSerializer(self.0))?,
+                )
+                .map_err(Error);
             self.2 += 1;
             o
         }
@@ -333,7 +318,8 @@ mod ser {
         type Error = Error;
 
         fn serialize_field<T>(&mut self, _key: &'static str, _value: &T) -> Result<(), Self::Error>
-            where T: ?Sized + Serialize
+        where
+            T: ?Sized + Serialize,
         {
             // FIXME
             unimplemented!()
@@ -353,7 +339,8 @@ mod ser {
         type Error = <PyObjectSerializer<'p> as Serializer>::Error;
 
         fn serialize_field<T>(&mut self, _value: &T) -> Result<(), Self::Error>
-            where T: ?Sized + Serialize
+        where
+            T: ?Sized + Serialize,
         {
             // FIXME
             unimplemented!()
@@ -374,7 +361,8 @@ mod ser {
 
         // Serialize a single element of the sequence.
         fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
-            where T: ?Sized + Serialize
+        where
+            T: ?Sized + Serialize,
         {
             self.1.push(value.serialize(PyObjectSerializer(self.0))?);
             Ok(())
@@ -391,7 +379,8 @@ mod ser {
         type Error = <PyObjectSerializer<'p> as Serializer>::Error;
 
         fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
-            where T: ?Sized + Serialize
+        where
+            T: ?Sized + Serialize,
         {
             self.1.push(value.serialize(PyObjectSerializer(self.0))?);
             Ok(())
