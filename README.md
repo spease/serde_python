@@ -5,10 +5,6 @@ A helper library that allows you to use serde-enabled structures seamlessly with
 ## Getting Started
 
 ```
-extern crate serde;
-#[macro_use]
-extern crate serde_derive;
-
 #[macro_use]
 extern crate serde_python;
 
