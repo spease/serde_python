@@ -2,6 +2,7 @@
 name = "serde_python_derive"
 description = "Uses serde to convert structs to Python"
 license = "MIT"
+readme = "README.md"
 version = "0.1.0"
 authors = ["Steven Pease <peasteven@gmail.com>"]
 
