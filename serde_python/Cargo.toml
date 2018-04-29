@@ -3,6 +3,7 @@ name = "serde_python"
 description = "Uses serde to convert structs to Python"
 license = "MIT"
 readme = "README.md"
+repository = "https://github.com/spease/serde_python.git"
 version = "0.1.0"
 authors = ["Steven Pease <peasteven@gmail.com>"]
 
