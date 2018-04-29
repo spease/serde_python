@@ -10,5 +10,5 @@ authors = ["Steven Pease <peasteven@gmail.com>"]
 [dependencies]
 cpython = "0.2.0"
 serde = "1.0.43"
-serde_python_derive = "0.1"
+serde_python_derive = "0.1.1"
 heck = "0.3.0"
