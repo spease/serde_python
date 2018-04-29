@@ -6,9 +6,6 @@ extern crate heck;
 // #[macro_use]
 // extern crate named_type_derive;
 pub extern crate serde;
-#[cfg(test)]
-#[macro_use]
-extern crate serde_derive;
 #[allow(unused_imports)]
 #[macro_use]
 extern crate serde_python_derive;

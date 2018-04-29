@@ -4,12 +4,11 @@ description = "Uses serde to convert structs to Python"
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/spease/serde_python.git"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Steven Pease <peasteven@gmail.com>"]
 
 [dependencies]
 cpython = "0.2.0"
-serde = "1.0.36"
-serde_derive = "1.0.36"
+serde = "1.0.43"
 serde_python_derive = "0.1"
 heck = "0.3.0"

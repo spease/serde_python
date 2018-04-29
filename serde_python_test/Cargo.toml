@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Steven Pease <peasteven@gmail.com>"]
 
 [dependencies]
-serde_python = {path="../serde_python", version="0.1" }
-serde_python_derive = {path="../serde_python_derive", version="0.1" }
-serde = "1.0.36"
-serde_derive = "1.0.36"
+serde_python = {path="../serde_python", version="0.1.1" }
+serde_python_derive = {path="../serde_python_derive", version="0.1.1" }
+serde = "1.0.43"
+serde_derive = "1.0.43"
